@@ -1,0 +1,36 @@
+{
+  "canisters": {
+    "scaled_storage": {
+      "candid": "src/scaled_storage/scaled_storage.did",
+      "package": "scaled_storage",
+      "type": "rust"
+    },
+    "scaled_storage_assets": {
+      "dependencies": [
+        "scaled_storage"
+      ],
+      "frontend": {
+        "entrypoint": "src/scaled_storage_assets/src/index.html"
+      },
+      "source": [
+        "src/scaled_storage_assets/assets",
+        "dist/scaled_storage_assets/"
+      ],
+      "type": "assets"
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": ""
+    }
+  },
+  "dfx": "0.9.3",
+  "networks": {
+    "local": {
+      "bind": "127.0.0.1:8000",
+      "type": "ephemeral"
+    }
+  },
+  "version": 1
+}
