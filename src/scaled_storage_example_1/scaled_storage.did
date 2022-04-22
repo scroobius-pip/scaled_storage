@@ -1,0 +1,31 @@
+type node_info_status = variant {
+    Initialized;
+    Ready;
+    ShutDown;
+    Migrating;
+    ScaleUp;
+    ScaleDown;
+};
+
+
+type node_info = record {
+    all_nodes: vec text;
+    current_memory_usage: nat64;
+    status: node_info_status;
+};
+
+type install_args = record {
+    all_nodes: vec text;
+};
+
+type init_canister_manager_param = record {
+    args: opt install_args;
+};
+
+
+service : {
+    "greet": (text) -> (text) query;
+     "node_info": () -> (node_info) query;
+     "init_canister_manager":(init_canister_manager_param)-> ();
+}
+

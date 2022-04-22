@@ -1,8 +1,8 @@
 {
   "canisters": {
-    "scaled_storage": {
-      "candid": "src/scaled_storage/scaled_storage.did",
-      "package": "scaled_storage",
+    "scaled_storage_example_1": {
+      "candid": "src/scaled_storage_example_1/scaled_storage.did",
+      "package": "scaled_storage_example_1",
       "type": "rust"
     },
     "scaled_storage_assets": {
