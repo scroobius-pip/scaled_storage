@@ -1,12 +1,13 @@
+use std::str::FromStr;
+
 // use ic_utils::call::AsyncCall;
 // use ic_utils::interfaces::ManagementCanister;
 // use ic_utils::Canister;
+use crate::node::Node;
 use ic_cdk::export::{
     candid::{CandidType, Deserialize},
     Principal,
 };
-
-use crate::node::Node;
 
 #[derive(Clone, Debug, CandidType, Deserialize)]
 pub struct InstallArgs {
@@ -106,13 +107,13 @@ impl<'a, Data: Default + Clone> CanisterManager<Data> {
         self.status = NodeStatus::Ready;
         let mut new_canister: Node<Principal, Data> = Node::new(node_id, Default::default());
 
-        if let Some(all_nodes) = all_nodes {
+        if let Some(mut all_nodes) = all_nodes {
+            all_nodes.push(node_id);
             for principal_id in all_nodes {
                 new_canister.add_node(principal_id);
             }
         }
 
-        new_canister.add_node(node_id);
         new_canister.prev_node_id = Some(caller_node_id);
         self.canister = new_canister;
 
@@ -232,7 +233,7 @@ mod tests {
 
         cm.lifecyle_init_node(Some(all_nodes), node_id, previous_node.clone());
         let node_info = cm.node_info();
-        
+
         assert_eq!(
             node_info.all_nodes,
             vec![previous_node.to_string(), node_id.to_string()]
