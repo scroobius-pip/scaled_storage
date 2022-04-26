@@ -22,10 +22,20 @@ type init_canister_manager_param = record {
     args: opt install_args;
 };
 
+type migrate_args = record {
+    data: blob;
+};
+
+type canister_manager_event = variant {
+ NodeCreated: text; 
+ NodeDeleted: text;
+ Migrate: migrate_args;
+};
 
 service : {
     "greet": (text) -> (text) query;
      "node_info": () -> (node_info) query;
      "init_canister_manager":(init_canister_manager_param)-> ();
+     "handle_event":(canister_manager_event)->();
 }
 

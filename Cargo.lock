@@ -657,9 +657,9 @@ checksum = "3688f13e7735ae5ca93edc490f6c5885b77d473255bc1fed92b9c805f972bf94"
 
 [[package]]
 name = "ic-cdk"
-version = "0.3.3"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "606276ed1ce363eb9ccaf492e36fb40425417dcd4598f261d47e0ed6a1309faa"
+checksum = "0e511d1a019e620d5a3dc43bead7d3c46912bf4f4bfb1d602059046c7a22bb1e"
 dependencies = [
  "candid",
  "cfg-if",
@@ -668,9 +668,9 @@ dependencies = [
 
 [[package]]
 name = "ic-cdk"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e511d1a019e620d5a3dc43bead7d3c46912bf4f4bfb1d602059046c7a22bb1e"
+checksum = "8bf92c1ce281995ec4cecca2a0da8f3420af546ed807dceb46441197642f3c1f"
 dependencies = [
  "candid",
  "cfg-if",
@@ -1125,16 +1125,20 @@ version = "0.1.0"
 dependencies = [
  "anchorhash",
  "async-std",
+ "candid",
+ "futures",
  "highway",
- "ic-cdk 0.3.3",
+ "ic-cdk 0.5.0",
  "ic-kit",
  "serde",
+ "serde_bytes",
 ]
 
 [[package]]
 name = "scaled_storage_example_1"
 version = "0.1.0"
 dependencies = [
+ "async-std",
  "candid",
  "ic-cdk 0.4.0",
  "ic-cdk-macros",

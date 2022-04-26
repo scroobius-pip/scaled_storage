@@ -14,7 +14,6 @@ pub struct Node<TId: Hash + Eq + Clone, Data: Default + Clone> {
     // pub index_node_id: TId,
     all_nodes: Vec<TId>,
     hash: AnchorHash<String, TId, HighwayBuildHasher>,
-    
 }
 
 impl<TId, Data> Node<TId, Data>
@@ -55,6 +54,10 @@ where
         }
     }
 
+    pub fn insert_data(&mut self, key: String, data: Data) {
+        self.data.insert(key, data);
+    }
+
     /// same functionality as with_data_mut but keys not in node are added
     pub fn with_upsert_data_mut<'a, F, R>(
         &mut self,
@@ -89,8 +92,7 @@ where
 
     pub fn add_node(&mut self, node_id: TId) -> bool {
         // check if node_id is already in hash
-    match  self.hash.resources()
-        .any(|id| id == &node_id) {
+        match self.hash.resources().any(|id| id == &node_id) {
             true => false,
             false => {
                 self.all_nodes.push(node_id.clone());
@@ -164,10 +166,7 @@ mod tests {
 
     #[test]
     fn can_add_node() {
-        let mut node_1 = Node::<_, String>::new(
-            "node_1".to_string(),
-            HashSet::new(),
-        );
+        let mut node_1 = Node::<_, String>::new("node_1".to_string(), HashSet::new());
 
         node_1.add_node("node_1".to_string());
         assert_eq!(
@@ -178,10 +177,7 @@ mod tests {
 
     #[test]
     fn can_remove_node() {
-        let mut node_1 = Node::<_, String>::new(
-            "node_1".to_string(),
-            HashSet::new(),
-        );
+        let mut node_1 = Node::<_, String>::new("node_1".to_string(), HashSet::new());
 
         node_1.add_node("node_1".to_string());
         node_1.remove_node(&"node_1".to_string());
@@ -190,10 +186,7 @@ mod tests {
 
     #[test]
     fn all_nodes() {
-        let mut node_1 = Node::<_, String>::new(
-            "node_1".to_string(),
-            HashSet::new(),
-        );
+        let mut node_1 = Node::<_, String>::new("node_1".to_string(), HashSet::new());
 
         node_1.add_node("node_1".to_string());
         node_1.add_node("node_2".to_string());
@@ -202,15 +195,11 @@ mod tests {
 
         node_1.remove_node(&"node_2".to_string());
         assert_eq!(node_1.all_nodes(), vec!["node_1", "node_3"]);
-
     }
 
     #[test]
     fn data_is_distributed_on_different_nodes() {
-        let mut index_node = Node::<_, String>::new(
-            "index_node_id".to_string(),
-            HashSet::new(),
-        );
+        let mut index_node = Node::<_, String>::new("index_node_id".to_string(), HashSet::new());
 
         index_node.add_node("index_node_id".to_string());
         index_node.add_node("node_1".to_string());
@@ -246,10 +235,8 @@ mod tests {
         let mut node_ids: Vec<String> = vec![];
 
         for _ in 1..100 {
-            let mut index_node = Node::<_, String>::new(
-                "index_node_id".to_string(),
-                HashSet::new(),
-            );
+            let mut index_node =
+                Node::<_, String>::new("index_node_id".to_string(), HashSet::new());
 
             index_node.add_node("index_node_id".to_string());
             index_node.add_node("node_1".to_string());
@@ -268,10 +255,8 @@ mod tests {
         let mut node_ids_2: Vec<String> = vec![];
 
         for id in 1..100 {
-            let mut index_node = Node::<_, String>::new(
-                "index_node_id".to_string(),
-                HashSet::new(),
-            );
+            let mut index_node =
+                Node::<_, String>::new("index_node_id".to_string(), HashSet::new());
 
             index_node.add_node("index_node_id".to_string());
             index_node.add_node("node_1".to_string());
@@ -282,10 +267,8 @@ mod tests {
         }
 
         for id in 1..100 {
-            let mut index_node_2 = Node::<_, String>::new(
-                "index_node_id".to_string(),
-                HashSet::new(),
-            );
+            let mut index_node_2 =
+                Node::<_, String>::new("index_node_id".to_string(), HashSet::new());
 
             index_node_2.add_node("node_1".to_string());
             index_node_2.add_node("index_node_id".to_string());
@@ -300,10 +283,7 @@ mod tests {
 
     #[test]
     fn with_data_mut_returns_result_none_when_key_maps_to_node_but_data_not_available() {
-        let mut node_1 = Node::<_, String>::new(
-            "index_node_id".to_string(),
-            HashSet::new(),
-        );
+        let mut node_1 = Node::<_, String>::new("index_node_id".to_string(), HashSet::new());
 
         node_1.add_node("index_node_id".to_string());
 
@@ -317,10 +297,7 @@ mod tests {
 
     #[test]
     fn with_data_mut_returns_result_when_key_maps_to_node_and_data_available() {
-        let mut node_1 = Node::<_, String>::new(
-            "index_node_id".to_string(),
-            HashSet::new(),
-        );
+        let mut node_1 = Node::<_, String>::new("index_node_id".to_string(), HashSet::new());
 
         node_1.add_node("index_node_id".to_string());
         node_1
@@ -334,10 +311,7 @@ mod tests {
 
     #[test]
     fn with_data_mut_returns_node_id_when_key_maps_to_different_node() {
-        let mut node_1 = Node::<_, String>::new(
-            "index_node_id".to_string(),
-            HashSet::new(),
-        );
+        let mut node_1 = Node::<_, String>::new("index_node_id".to_string(), HashSet::new());
 
         node_1.add_node("index_node_id".to_string());
         node_1.add_node("node_1".to_string());
@@ -356,10 +330,7 @@ mod tests {
 
     #[test]
     fn get_keys_to_migrate_returns_added_nodes_ids() {
-        let mut index_node = Node::<_, String>::new(
-            "index_node_id".to_string(),
-            HashSet::new(),
-        );
+        let mut index_node = Node::<_, String>::new("index_node_id".to_string(), HashSet::new());
 
         index_node.add_node("index_node_id".to_string());
 
@@ -389,15 +360,9 @@ mod tests {
 
     #[test]
     fn get_keys_to_migrate_returns_deleted_nodes_ids() {
-        let mut index_node = Node::<_, String>::new(
-            "index_node_id".to_string(),
-            HashSet::new(),
-        );
+        let mut index_node = Node::<_, String>::new("index_node_id".to_string(), HashSet::new());
 
-        let mut node_1 = Node::<_, String>::new(
-            "node_1".to_string(),
-            HashSet::new(),
-        );
+        let mut node_1 = Node::<_, String>::new("node_1".to_string(), HashSet::new());
 
         index_node.add_node("index_node_id".into());
         index_node.add_node("node_1".into());
