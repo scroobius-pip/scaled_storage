@@ -1,11 +1,10 @@
 use crate::node::Node;
-use futures::executor::block_on;
 use ic_cdk::export::{
     candid::{CandidType, Deserialize},
     Principal,
 };
 
-use ic_kit::candid::{ Decode, Encode};
+use ic_kit::candid::{Decode, Encode};
 use ic_kit::ic;
 use ic_kit::interfaces::management::{self, CanisterSettings};
 use ic_kit::interfaces::Method;
@@ -15,7 +14,7 @@ use serde::de::DeserializeOwned;
 pub enum CanisterManagerEvent {
     NodeCreated(Principal),
     NodeDeleted(Principal),
-    Migrate(MigrateArgs)
+    Migrate(MigrateArgs),
 }
 
 #[derive(Clone, Debug, CandidType, Deserialize)]
@@ -89,7 +88,7 @@ where
     }
 }
 
-#[derive(CandidType, Deserialize,Debug,Clone)]
+#[derive(CandidType, Deserialize, Debug, Clone)]
 pub struct MigrateArgs {
     #[serde(with = "serde_bytes")]
     data: Vec<u8>,
@@ -108,7 +107,7 @@ pub struct CanisterManager<Data: Default + Clone> {
     // reserve_memory: u64,
 }
 
-impl<'a, Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data> {
+impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data> {
     pub fn new(node_id: Principal) -> Self {
         let mut new_canister: Node<Principal, Data> =
             Node::new(node_id.clone(), Default::default());
@@ -147,7 +146,7 @@ impl<'a, Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<
         // }
     }
 
-    pub fn lifecyle_init_node(
+    pub async fn lifecyle_init_node(
         &mut self,
         all_nodes: Option<Vec<Principal>>,
         node_id: Principal,
@@ -166,23 +165,24 @@ impl<'a, Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<
         new_canister.prev_node_id = Some(caller_node_id);
         self.canister = new_canister;
 
-        block_on(self.broadcast_event(CanisterManagerEvent::NodeCreated(self.canister.id)));
+        self.broadcast_event(CanisterManagerEvent::NodeCreated(self.canister.id))
+            .await;
 
         // self.node_info()
     }
 
-    pub fn lifecyle_heartbeat_node(&mut self) -> () {
+    pub async fn lifecyle_heartbeat_node(&mut self) -> () {
         if self.should_scale_up() {
             self.status = NodeStatus::ScaleUp;
-            let create_node_result = block_on(self.create_node());
+            let create_node_result = self.create_node().await;
 
             match create_node_result {
                 Some(new_node_id) => {
                     self.canister.add_node(new_node_id.clone());
-                    block_on(self.initialize_node(new_node_id.clone()));
-                    block_on(self.migrate_data(new_node_id));
+                    self.initialize_node(new_node_id.clone()).await;
+                   self.migrate_data(new_node_id).await;
                     self.canister.next_node_id = Some(new_node_id);
-                    block_on(self.broadcast_event(CanisterManagerEvent::NodeCreated(new_node_id)));
+                    self.broadcast_event(CanisterManagerEvent::NodeCreated(new_node_id)).await;
                 }
                 None => {
                     self.status = NodeStatus::Ready;
@@ -283,23 +283,23 @@ impl<'a, Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<
         }
     }
 
-    pub fn lifecycle_handle_event(&mut self, event: CanisterManagerEvent) -> () {
+    pub async fn lifecycle_handle_event(&mut self, event: CanisterManagerEvent) -> () {
         match event {
             CanisterManagerEvent::NodeCreated(node_id) => {
                 if node_id != self.canister.id {
                     self.canister.add_node(node_id);
-                    block_on(self.migrate_data(node_id));
-                    block_on(self.broadcast_event(CanisterManagerEvent::NodeCreated(node_id)));
+                    self.migrate_data(node_id).await;
+                    self.broadcast_event(CanisterManagerEvent::NodeCreated(node_id)).await;
                 }
             }
             CanisterManagerEvent::NodeDeleted(node_id) => {
                 if node_id != self.canister.id {
                     self.canister.remove_node(&node_id);
-                    block_on(self.migrate_data(node_id));
-                    block_on(self.broadcast_event(CanisterManagerEvent::NodeDeleted(node_id)))
+                    self.migrate_data(node_id).await;
+                    self.broadcast_event(CanisterManagerEvent::NodeDeleted(node_id)).await;
                 }
             }
-            _=>()
+            _ => (),
         }
     }
 
@@ -314,7 +314,7 @@ impl<'a, Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<
         // send a request to all nodes
         let all_canisters = self.canister.all_nodes();
         for &canister_id in all_canisters {
-            ic::call::<_, (), _>(canister_id, "handle_event", (event.clone(),)).await;
+          let _ =  ic::call::<_, (), _>(canister_id, "handle_event", (event.clone(),)).await;
         }
     }
 
