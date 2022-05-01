@@ -20,7 +20,14 @@ pub enum CanisterManagerEvent {
 #[derive(Clone, Debug, CandidType, Deserialize)]
 pub struct InstallArgs {
     pub all_nodes: Vec<Principal>,
+    pub prev_node: Option<Principal>,
     // index_node: Principal,
+}
+
+#[derive(Clone, Debug, CandidType, Deserialize)]
+pub struct WasmInitArgs {
+    position: usize, // 0 for start chunk, 1 for intermediate chunk, 2 for end chunks
+    wasm_chunk: Vec<u8>,
 }
 
 #[derive(Clone, Debug, CandidType, Deserialize)]
@@ -99,12 +106,7 @@ type Canister<Data> = Node<Principal, Data>;
 pub struct CanisterManager<Data: Default + Clone> {
     status: NodeStatus,
     pub canister: Canister<Data>,
-    // when this memory is reached, node is scaled up
-    // max_memory: u64,
-    // when this memory is reached, node is scaled down
-    // min_memory: u64,
-    // max_memory > reserve_memory + min_memory
-    // reserve_memory: u64,
+    wasm_binary: Option<Vec<u8>>,
 }
 
 impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data> {
@@ -112,13 +114,12 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
         let mut new_canister: Node<Principal, Data> =
             Node::new(node_id.clone(), Default::default());
 
-        //initial canister
         new_canister.add_node(node_id);
 
         Self {
-            status: NodeStatus::Ready,
+            status: NodeStatus::Initialized,
             canister: new_canister,
-            // reserve_memory: 0,
+            wasm_binary: None, // reserve_memory: 0,
         }
     }
 
@@ -146,29 +147,48 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
         // }
     }
 
+    pub fn lifecycle_init_wasm(&mut self, args: WasmInitArgs) -> bool {
+        match args.position {
+            0 => {
+                self.wasm_binary = Some(args.wasm_chunk);
+                true
+            }
+            1 | 2 => match self.wasm_binary.as_mut() {
+                Some(wasm_binary) => {
+                    wasm_binary.extend_from_slice(&args.wasm_chunk);
+                    if args.position == 2 {
+                        self.status = NodeStatus::Ready;
+                    }
+                    true
+                }
+
+                None => false,
+            },
+            _ => false,
+        }
+    }
+
     pub async fn lifecyle_init_node(
         &mut self,
-        all_nodes: Option<Vec<Principal>>,
-        node_id: Principal,
-        caller_node_id: Principal,
+        all_nodes: Option<Vec<Principal>>
     ) -> () {
-        self.status = NodeStatus::Ready;
+        let node_id = self.canister.id;
         let mut new_canister: Node<Principal, Data> = Node::new(node_id, Default::default());
 
         if let Some(mut all_nodes) = all_nodes {
+            let prev_node_id = all_nodes[all_nodes.len() - 1].clone();
+            new_canister.prev_node_id = Some(prev_node_id);
             all_nodes.push(node_id);
             for principal_id in all_nodes {
                 new_canister.add_node(principal_id);
             }
         }
 
-        new_canister.prev_node_id = Some(caller_node_id);
         self.canister = new_canister;
 
         self.broadcast_event(CanisterManagerEvent::NodeCreated(self.canister.id))
             .await;
 
-        // self.node_info()
     }
 
     pub async fn lifecyle_heartbeat_node(&mut self) -> () {
@@ -180,9 +200,10 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
                 Some(new_node_id) => {
                     self.canister.add_node(new_node_id.clone());
                     self.initialize_node(new_node_id.clone()).await;
-                   self.migrate_data(new_node_id).await;
+                    self.migrate_data(new_node_id).await;
                     self.canister.next_node_id = Some(new_node_id);
-                    self.broadcast_event(CanisterManagerEvent::NodeCreated(new_node_id)).await;
+                    self.broadcast_event(CanisterManagerEvent::NodeCreated(new_node_id))
+                        .await;
                 }
                 None => {
                     self.status = NodeStatus::Ready;
@@ -220,8 +241,25 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
     async fn initialize_node(&self, canister_id: Principal) -> bool {
         //vector of &Principal to Principal
 
+        let wasm_code = self.wasm_binary.clone().unwrap();
+
+        let install_args = management::InstallCodeArgument {
+            canister_id,
+            mode: management::InstallMode::Install,
+            wasm_module: wasm_code,
+            arg: Vec::<u8>::new(),
+        };
+
+        let result = management::InstallCode::perform_with_payment(
+            Principal::management_canister(),
+            (install_args,),
+            10_000_000,
+        )
+        .await;
+
         let args = InitCanisterManagerParam {
             args: Some(InstallArgs {
+                prev_node: Some(self.canister.id),
                 all_nodes: self.canister.all_nodes().into_iter().cloned().collect(),
             }),
         };
@@ -289,14 +327,16 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
                 if node_id != self.canister.id {
                     self.canister.add_node(node_id);
                     self.migrate_data(node_id).await;
-                    self.broadcast_event(CanisterManagerEvent::NodeCreated(node_id)).await;
+                    self.broadcast_event(CanisterManagerEvent::NodeCreated(node_id))
+                        .await;
                 }
             }
             CanisterManagerEvent::NodeDeleted(node_id) => {
                 if node_id != self.canister.id {
                     self.canister.remove_node(&node_id);
                     self.migrate_data(node_id).await;
-                    self.broadcast_event(CanisterManagerEvent::NodeDeleted(node_id)).await;
+                    self.broadcast_event(CanisterManagerEvent::NodeDeleted(node_id))
+                        .await;
                 }
             }
             _ => (),
@@ -314,7 +354,7 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
         // send a request to all nodes
         let all_canisters = self.canister.all_nodes();
         for &canister_id in all_canisters {
-          let _ =  ic::call::<_, (), _>(canister_id, "handle_event", (event.clone(),)).await;
+            let _ = ic::call::<_, (), _>(canister_id, "handle_event", (event.clone(),)).await;
         }
     }
 
@@ -334,7 +374,12 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
 
 #[cfg(test)]
 mod tests {
+    use crate::node_manager::NodeStatus;
+
     use super::CanisterManager;
+    use super::WasmInitArgs;
+    use async_std::test as async_test;
+    use ic_kit::MockContext;
     use ic_kit::mock_principals;
     use ic_kit::Principal;
 
@@ -347,15 +392,21 @@ mod tests {
         assert_eq!(node_info.all_nodes, vec![node_id.to_string()]);
     }
 
-    #[test]
-    fn node_initialized_properly() {
+    #[async_test]
+    async fn node_initialized_properly() {
         let node_id = mock_principals::alice();
         let previous_node = mock_principals::bob();
+
+        MockContext::new()
+            .with_caller(previous_node.clone())
+            .with_id(node_id.clone())
+            .with_constant_return_handler(())
+            .inject();
 
         let mut cm = CanisterManager::<String>::new(node_id.clone());
         let all_nodes = vec![previous_node.clone()];
 
-        cm.lifecyle_init_node(Some(all_nodes), node_id, previous_node.clone());
+        cm.lifecyle_init_node(Some(all_nodes)).await;
         let node_info = cm.node_info();
 
         assert_eq!(
@@ -364,6 +415,30 @@ mod tests {
         );
 
         assert_eq!(cm.canister.prev_node_id, Some(previous_node));
+        matches!(cm.get_status(), NodeStatus::Initialized);
+    }
+
+    #[test]
+    fn node_wasm_initialized_properly() {
+        let node_id = mock_principals::alice();
+        let mut cm = CanisterManager::<String>::new(node_id.clone());
+
+        assert!(cm.lifecycle_init_wasm(WasmInitArgs {
+            position: 0,
+            wasm_chunk: Vec::<u8>::default(),
+        }));
+
+        assert!(cm.lifecycle_init_wasm(WasmInitArgs {
+            position: 1,
+            wasm_chunk: Vec::<u8>::default(),
+        }));
+
+        assert!(cm.lifecycle_init_wasm(WasmInitArgs {
+            position: 2,
+            wasm_chunk: Vec::<u8>::default(),
+        }));
+
+        matches!(cm.get_status(), NodeStatus::Ready);
     }
 }
 

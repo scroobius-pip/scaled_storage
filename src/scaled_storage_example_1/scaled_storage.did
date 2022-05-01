@@ -16,6 +16,7 @@ type node_info = record {
 
 type install_args = record {
     all_nodes: vec text;
+    prev_node: opt text;
 };
 
 type init_canister_manager_param = record {

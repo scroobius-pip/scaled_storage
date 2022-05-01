@@ -1,8 +1,7 @@
 use ic_kit::{ic, macros::*};
-use ref_thread_local::{ref_thread_local, RefThreadLocal};
 use scaled_storage::node::NodeResult;
 use scaled_storage::node_manager::{
-    CanisterManager, CanisterManagerEvent, InitCanisterManagerParam, NodeInfo,
+    CanisterManager, CanisterManagerEvent, InitCanisterManagerParam, NodeInfo, WasmInitArgs,
 };
 
 // this project should be renamed scaled_snippets
@@ -28,16 +27,32 @@ fn init() {
 }
 
 #[update]
-fn update_data() {
+fn update_data(key: String, value: String) -> String {
     unsafe {
         match CANISTER_MANAGER
             .as_mut()
             .unwrap()
             .canister
-            .with_upsert_data_mut("key".to_string(), |data| {
-                data.push_str("value");
+            .with_upsert_data_mut(key.clone(), |data| {
+                *data = value.clone();
+                data.clone()
             }) {
-            NodeResult::NodeId(node_id) => {}
+            NodeResult::NodeId(node_id) => format!("{} in {}", key, node_id),
+            NodeResult::Result(result) => result.unwrap(),
+        }
+    }
+}
+
+#[query]
+fn get_data(key: String) -> String {
+    unsafe {
+        match CANISTER_MANAGER
+            .as_mut()
+            .unwrap()
+            .canister
+            .with_data_mut(key.clone(), |data| data.clone())
+        {
+            NodeResult::NodeId(node_id) => format!("{} in {}", key, node_id),
             NodeResult::Result(result) => result.unwrap(),
         }
     }
@@ -47,25 +62,31 @@ fn update_data() {
 async fn init_canister_manager(param: InitCanisterManagerParam) {
     unsafe {
         match param.args {
-            Some(args) => CANISTER_MANAGER.as_mut().unwrap().lifecyle_init_node(
-                Some(args.all_nodes),
-                ic::id(),
-                ic::caller(),
-            ),
-            None => {
-                CANISTER_MANAGER
-                    .as_mut()
-                    .unwrap()
-                    .lifecyle_init_node(None, ic::id(), ic::caller())
-            }
+            Some(args) => CANISTER_MANAGER
+                .as_mut()
+                .unwrap()
+                .lifecyle_init_node(Some(args.all_nodes), ic::id()),
+            None => CANISTER_MANAGER
+                .as_mut()
+                .unwrap()
+                .lifecyle_init_node(None, ic::id()),
         }
         .await
     }
 }
 
+#[update]
+fn init_wasm(param: WasmInitArgs) -> bool {
+    unsafe {
+        CANISTER_MANAGER
+            .as_mut()
+            .unwrap()
+            .lifecycle_init_wasm(param)
+    }
+}
+
 #[heartbeat]
 async fn heartbeat() {
-    // CANISTER_MANAGER.borrow_mut().lifecyle_heartbeat_node().await;
     unsafe {
         CANISTER_MANAGER
             .as_mut()
@@ -127,6 +148,7 @@ mod tests {
 
         init_canister_manager(InitCanisterManagerParam {
             args: Some(InstallArgs {
+                prev_node: Some(previous_node),
                 all_nodes: vec![previous_node],
             }),
         })
