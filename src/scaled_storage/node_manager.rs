@@ -1,4 +1,5 @@
 use crate::node::Node;
+use candid::utils::ArgumentEncoder;
 use ic_cdk::export::{
     candid::{CandidType, Deserialize},
     Principal,
@@ -122,29 +123,58 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
         }
     }
 
+    pub async fn forward_request<R, M, A>(
+        node_id: Principal,
+        method: M,
+        args: A,
+    ) -> Result<R, String>
+    where
+        M: Into<String>,
+        A: ArgumentEncoder,
+        R: CandidType + DeserializeOwned,
+    {
+        let result = ic::call::<_, (R,), _>(node_id, method, args).await;
+        match result {
+            Ok((result,)) => Ok(result),
+            Err((_, error)) => Err(error.to_string()),
+        }
+    }
+
+    // pub async fn with_data_mut<F, R, M>(
+    //     &mut self,
+    //     key: String,
+    //     action: F,
+    //     method: M,
+    // ) -> Result<R, String>
+    // where
+    //     F: FnOnce(&mut Data) -> R,
+    //     M: Into<String>,
+    // {
+    //     match self.canister.with_data_mut(key, action) {
+    //         NodeResult::NodeId(node_id) => {
+    //             let result = ic::call::<_, (Data,), _>(node_id, method, (key,)).await;
+
+    //             match result {
+    //                 Ok((data,)) => Ok(data),
+    //                 Err((_, error)) => Err(error.to_string()),
+    //             }
+    //         }
+    //         NodeResult::Result(result) => Ok(result),
+    //     }
+    // }
+
     fn get_status(&self) -> &NodeStatus {
         &self.status
     }
 
     fn should_scale_up(&self) -> bool {
-        // let current_memory_usage: u64 = 0;
-        // current_memory_usage >= self.max_memory
-        //     && self.canister.next_node_id.is_none()
-        //     && matches!(self.status, NodeStatus::Ready)
-        // let size = self.canister.with_data_mut()
-        self.canister.size() > 2 && self.canister.next_node_id.is_none() && matches!(self.status, NodeStatus::Ready)
+        self.canister.size() > 2
+            && self.canister.next_node_id.is_none()
+            && matches!(self.status, NodeStatus::Ready)
     }
 
     fn should_scale_down(&self) -> bool {
         false
-        // if self.canister.prev_node_id.is_some() {
-        //     let current_memory_usage: u64 = 0;
-        //     current_memory_usage <= self.min_memory
-        //         && self.canister.prev_node_id.is_some()
-        //         && matches!(self.status, NodeStatus::Ready)
-        // } else {
-        //     false
-        // }
     }
 
     pub fn lifecycle_init_wasm(&mut self, args: WasmInitArgs) -> bool {
@@ -214,7 +244,7 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
                             "Failed to migrate data to node {}",
                             new_node_id
                         )));
-                        return 
+                        return;
                     }
 
                     self.status = NodeStatus::Ready;
