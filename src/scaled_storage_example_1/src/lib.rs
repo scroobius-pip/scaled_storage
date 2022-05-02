@@ -27,7 +27,7 @@ fn init() {
 }
 
 #[update]
-fn update_data(key: String, value: String) -> String {
+async fn update_data(key: String, value: String) -> String {
     unsafe {
         match CANISTER_MANAGER
             .as_mut()
@@ -37,14 +37,20 @@ fn update_data(key: String, value: String) -> String {
                 *data = value.clone();
                 data.clone()
             }) {
-            NodeResult::NodeId(node_id) => format!("{} in {}", key, node_id),
+            NodeResult::NodeId(node_id) => {
+                let result =   ic::call::<_,(String,),_>(node_id, "update_data", (key,value)).await;
+                match result {
+                    Ok((result,)) => result,
+                    Err(error) => format!("{:?}", error),
+                } 
+            },
             NodeResult::Result(result) => result.unwrap(),
         }
     }
 }
 
 #[query]
-fn get_data(key: String) -> String {
+async fn get_data(key: String) -> String {
     unsafe {
         match CANISTER_MANAGER
             .as_mut()
@@ -52,7 +58,13 @@ fn get_data(key: String) -> String {
             .canister
             .with_data_mut(key.clone(), |data| data.clone())
         {
-            NodeResult::NodeId(node_id) => format!("{} in {}", key, node_id),
+            NodeResult::NodeId(node_id) => {
+                let result =   ic::call::<_,(String,),_>(node_id, "get_data", (key,)).await;
+                match result {
+                    Ok((result,)) => result,
+                    Err(error) => format!("{:?}", error),
+                }
+            },
             NodeResult::Result(result) => result.unwrap(),
         }
     }
