@@ -1780,6 +1780,7 @@ dependencies = [
  "highway",
  "ic-cdk 0.5.0",
  "ic-kit",
+ "read-byte-slice",
  "serde",
  "serde_bytes",
 ]
@@ -1794,6 +1795,7 @@ dependencies = [
  "ic-cdk-macros",
  "ic-kit",
  "scaled_storage",
+ "serde",
 ]
 
 [[package]]

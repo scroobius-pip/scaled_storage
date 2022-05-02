@@ -1,9 +1,12 @@
+use std::ops::{Add, Div};
+
 use crate::node::Node;
 use candid::utils::ArgumentEncoder;
 use ic_cdk::export::{
     candid::{CandidType, Deserialize},
     Principal,
 };
+use read_byte_slice::{ByteSliceIter, FallibleStreamingIterator};
 
 use ic_kit::candid::{Decode, Encode};
 use ic_kit::ic;
@@ -56,7 +59,8 @@ pub enum NodeError {
 #[derive(Clone, Debug, CandidType, Deserialize)]
 pub struct NodeInfo {
     pub all_nodes: Vec<String>,
-    pub current_memory_usage: u64,
+    pub prev_node_id: Option<Principal>,
+    pub next_node_id: Option<Principal>,
     pub status: NodeStatus,
 }
 
@@ -203,11 +207,13 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
         let mut new_canister: Node<Principal, Data> = Node::new(node_id, Default::default());
 
         if let Some(mut all_nodes) = all_nodes {
-            let prev_node_id = all_nodes[all_nodes.len() - 1].clone();
-            new_canister.prev_node_id = Some(prev_node_id);
-            all_nodes.push(node_id);
-            for principal_id in all_nodes {
-                new_canister.add_node(principal_id);
+            if all_nodes.len() > 1 {
+                let prev_node_id = all_nodes[all_nodes.len() - 2].clone(); //prev_node is actually the second to the last, since all_nodes has already been updated with the new node as the last item
+                new_canister.prev_node_id = Some(prev_node_id);
+                all_nodes.push(node_id);
+                for principal_id in all_nodes {
+                    new_canister.add_node(principal_id);
+                }
             }
         }
 
@@ -276,7 +282,7 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
         let result = management::CreateCanister::perform_with_payment(
             Principal::management_canister(),
             (arg,),
-            10_000_000,
+            ic::balance().div(self.canister.all_nodes().len().add(1) as u64),
         )
         .await;
 
@@ -328,6 +334,74 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
                 canister_id
             )));
 
+            return false;
+        }
+
+        if !self.init_wasm(canister_id).await {
+            self.status = NodeStatus::Error(NodeError::Initialize(format!(
+                "Failed to initialize wasm {}",
+                canister_id
+            )));
+            return false;
+        }
+
+        true
+    }
+
+    async fn init_wasm(&self, canister_id: Principal) -> bool {
+        #[derive(CandidType, Deserialize)]
+        pub struct WasmInitArgs {
+            position: usize,
+            wasm_chunk: Vec<u8>,
+        }
+
+        async fn send_wasm(args: WasmInitArgs, canister_id: Principal) -> bool {
+            let result = ic::call::<_, (bool,), _>(canister_id, "init_wasm", (args,)).await;
+            result.is_ok()
+        }
+
+        let mut byte_iterator = self
+            .wasm_binary
+            .as_ref()
+            .unwrap()
+            .chunks(1024 * 1024)
+            .into_iter();
+
+        if !send_wasm(
+            WasmInitArgs {
+                position: 0,
+                wasm_chunk: byte_iterator.next().unwrap().to_vec(),
+            },
+            canister_id,
+        )
+        .await
+        {
+            return false;
+        }
+
+        while let Some(wasm_chunk) = byte_iterator.next() {
+            if !send_wasm(
+                WasmInitArgs {
+                    position: 1,
+                    wasm_chunk: wasm_chunk.to_vec(),
+                },
+                canister_id,
+            )
+            .await
+            {
+                return false;
+            }
+        }
+
+        if !send_wasm(
+            WasmInitArgs {
+                position: 2,
+                wasm_chunk: vec![],
+            },
+            canister_id,
+        )
+        .await
+        {
             return false;
         }
 
@@ -435,18 +509,17 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
     }
 
     async fn broadcast_event(&mut self, event: CanisterManagerEvent) -> () {
-        // send a request to all nodes except node_id
         let all_canisters = self.canister.all_nodes();
         for &canister_id in all_canisters {
             if self.canister.id != canister_id {
                 let result =
                     ic::call::<_, (), _>(canister_id, "handle_event", (event.clone(),)).await;
-                if result.is_err() {
+
+                if let Err(e) = result {
                     self.status = NodeStatus::Error(NodeError::Broadcast(format!(
-                        "Failed to broadcast event {:?} to {}",
-                        event, canister_id
+                        "Failed to broadcast event, error {} to node {}",
+                        e.1, canister_id
                     )));
-                    return;
                 }
             }
         }
@@ -460,7 +533,8 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
                 .iter()
                 .map(|&principal| principal.to_string())
                 .collect(),
-            current_memory_usage: 0,
+            next_node_id: self.canister.next_node_id,
+            prev_node_id: self.canister.prev_node_id,
             status: self.status.clone(),
         }
     }

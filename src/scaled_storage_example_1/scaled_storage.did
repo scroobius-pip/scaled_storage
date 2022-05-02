@@ -18,7 +18,8 @@ type node_info_status = variant {
 
 type node_info = record {
     all_nodes: vec text;
-    current_memory_usage: nat64;
+    prev_node_id: opt principal;
+    next_node_id: opt principal;
     status: node_info_status;
 };
 
@@ -45,13 +46,18 @@ type canister_manager_event = variant {
  Migrate: migrate_args;
 };
 
+type node_result = record {
+    data: text;
+    from: principal;
+}
+
 service : {
     "greet": (text) -> (text) query;
      "node_info": () -> (node_info) query;
      "init_canister_manager":(init_canister_manager_param)-> ();
      "handle_event":(canister_manager_event)->();
      "init_wasm":(wasm_init_args)->(bool);
-     "get_data":(text)->(text) query;
-     "update_data":(text,text)->(text);
+     "get_data":(text)->(node_result) query;
+     "update_data":(text,text)->(node_result);
 }
 

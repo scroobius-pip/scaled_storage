@@ -14,5 +14,7 @@ ic-cdk = "0.4"
 ic-cdk-macros = "0.4"
 scaled_storage = {path = "../scaled_storage"}
 ic-kit = "0.4.4"
+serde = "1.0"
+
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 async-std = { version="1.10.0", features = ["attributes"] }

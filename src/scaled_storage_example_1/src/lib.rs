@@ -1,21 +1,9 @@
+use candid::{CandidType, Deserialize, Principal};
 use ic_kit::{ic, macros::*};
 use scaled_storage::node::NodeResult;
 use scaled_storage::node_manager::{
     CanisterManager, CanisterManagerEvent, InitCanisterManagerParam, NodeInfo, WasmInitArgs,
 };
-
-// this project should be renamed scaled_snippets
-// thread_local! {
-// static CANISTER_MANAGER: RefCell<CanisterManager<String>> = RefCell::new(CanisterManager::new(
-//     ic::id()
-//   ));
-// }
-
-// ref_thread_local! {
-//     static managed CANISTER_MANAGER: CanisterManager<String> = CanisterManager::new(
-//         ic::id()
-//       );
-// }
 
 static mut CANISTER_MANAGER: Option<CanisterManager<String>> = None;
 
@@ -26,46 +14,69 @@ fn init() {
     }
 }
 
+#[derive(CandidType, Deserialize, Clone, Debug)]
+pub struct OperationResult {
+    data: String,
+    from: Principal,
+}
+
 #[update]
-async fn update_data(key: String, value: String) -> String {
+async fn update_data(key: String, value: String) -> OperationResult {
     unsafe {
-        match CANISTER_MANAGER
-            .as_mut()
-            .unwrap()
-            .canister
-            .with_upsert_data_mut(key.clone(), |data| {
-                *data = value.clone();
-                data.clone()
-            }) {
+        let canister_manager = &mut CANISTER_MANAGER.as_mut().unwrap().canister;
+
+        match canister_manager.with_upsert_data_mut(key.clone(), |data| {
+            *data = value.clone();
+            data.clone()
+        }) {
             NodeResult::NodeId(node_id) => {
-                let result =   ic::call::<_,(String,),_>(node_id, "update_data", (key,value)).await;
-                match result {
-                    Ok((result,)) => result,
-                    Err(error) => format!("{:?}", error),
-                } 
+                match CanisterManager::<String>::forward_request::<OperationResult, _, _>(
+                    node_id,
+                    "update_data",
+                    (key, value),
+                )
+                .await
+                {
+                    Ok(result) => result,
+                    Err(error) => OperationResult {
+                        data: error,
+                        from: node_id,
+                    },
+                }
+            }
+            NodeResult::Result(result) => OperationResult {
+                data: result.unwrap_or_default(),
+                from: canister_manager.id,
             },
-            NodeResult::Result(result) => result.unwrap(),
         }
     }
 }
 
 #[query]
-async fn get_data(key: String) -> String {
+async fn get_data(key: String) -> OperationResult {
     unsafe {
-        match CANISTER_MANAGER
-            .as_mut()
-            .unwrap()
-            .canister
-            .with_data_mut(key.clone(), |data| data.clone())
-        {
+        let canister = &mut CANISTER_MANAGER.as_mut().unwrap().canister;
+
+        match canister.with_data_mut(key.clone(), |data| data.clone()) {
             NodeResult::NodeId(node_id) => {
-                let result =   ic::call::<_,(String,),_>(node_id, "get_data", (key,)).await;
+                let result = CanisterManager::<String>::forward_request::<OperationResult, _, _>(
+                    node_id,
+                    "get_data",
+                    (key,),
+                )
+                .await;
                 match result {
-                    Ok((result,)) => result,
-                    Err(error) => format!("{:?}", error),
+                    Ok(result) => result,
+                    Err(error) => OperationResult {
+                        data: error,
+                        from: node_id,
+                    },
                 }
+            }
+            NodeResult::Result(result) => OperationResult {
+                data: result.unwrap_or_default(),
+                from: canister.id,
             },
-            NodeResult::Result(result) => result.unwrap(),
         }
     }
 }
@@ -184,7 +195,7 @@ mod tests {
             .with_caller(caller.clone())
             .with_id(node_id.clone())
             .inject();
-            
+
         init();
 
         init_wasm(WasmInitArgs {
