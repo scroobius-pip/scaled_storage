@@ -65,11 +65,8 @@ async fn init_canister_manager(param: InitCanisterManagerParam) {
             Some(args) => CANISTER_MANAGER
                 .as_mut()
                 .unwrap()
-                .lifecyle_init_node(Some(args.all_nodes), ic::id()),
-            None => CANISTER_MANAGER
-                .as_mut()
-                .unwrap()
-                .lifecyle_init_node(None, ic::id()),
+                .lifecyle_init_node(Some(args.all_nodes)),
+            None => CANISTER_MANAGER.as_mut().unwrap().lifecyle_init_node(None),
         }
         .await
     }
@@ -115,8 +112,8 @@ fn node_info() -> NodeInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ic_kit::{mock_principals, Canister, MockContext};
-    use scaled_storage::node_manager::InstallArgs;
+    use ic_kit::{mock_principals, MockContext};
+    use scaled_storage::node_manager::{InstallArgs, NodeStatus};
 
     #[test]
     fn initial_canister() {
@@ -128,8 +125,10 @@ mod tests {
             .with_id(node_id.clone())
             .inject();
 
+        init();
         let node_info = node_info();
         assert_eq!(node_info.all_nodes, vec![node_id.to_string()]);
+        matches!(node_info.status, NodeStatus::Initialized);
         // Canister::new()
     }
 
@@ -144,11 +143,11 @@ mod tests {
             .with_constant_return_handler(())
             .inject();
 
+        init();
         // let watcher = ctx.watch();
 
         init_canister_manager(InitCanisterManagerParam {
             args: Some(InstallArgs {
-                prev_node: Some(previous_node),
                 all_nodes: vec![previous_node],
             }),
         })
@@ -160,5 +159,39 @@ mod tests {
             node_info.all_nodes,
             vec![previous_node.to_string(), node_id.to_string()]
         );
+
+        matches!(node_info.status, NodeStatus::Initialized);
+    }
+
+    #[test]
+    fn init_wasm_puts_node_on_ready() {
+        let node_id = mock_principals::alice();
+        let caller = mock_principals::bob();
+
+        MockContext::new()
+            .with_caller(caller.clone())
+            .with_id(node_id.clone())
+            .inject();
+            
+        init();
+
+        init_wasm(WasmInitArgs {
+            position: 0,
+            wasm_chunk: Vec::<u8>::default(),
+        });
+
+        init_wasm(WasmInitArgs {
+            position: 1,
+            wasm_chunk: Vec::<u8>::default(),
+        });
+
+        init_wasm(WasmInitArgs {
+            position: 2,
+            wasm_chunk: Vec::<u8>::default(),
+        });
+
+        let node_info = node_info();
+
+        matches!(node_info.status, NodeStatus::Ready);
     }
 }

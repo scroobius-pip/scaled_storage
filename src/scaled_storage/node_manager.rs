@@ -20,14 +20,12 @@ pub enum CanisterManagerEvent {
 #[derive(Clone, Debug, CandidType, Deserialize)]
 pub struct InstallArgs {
     pub all_nodes: Vec<Principal>,
-    pub prev_node: Option<Principal>,
-    // index_node: Principal,
 }
 
 #[derive(Clone, Debug, CandidType, Deserialize)]
 pub struct WasmInitArgs {
-    position: usize, // 0 for start chunk, 1 for intermediate chunk, 2 for end chunks
-    wasm_chunk: Vec<u8>,
+    pub position: usize, // 0 for start chunk, 1 for intermediate chunk, 2 for end chunks
+    pub wasm_chunk: Vec<u8>,
 }
 
 #[derive(Clone, Debug, CandidType, Deserialize)]
@@ -39,7 +37,7 @@ pub struct InitCanisterManagerParam {
 pub enum NodeStatus {
     Initialized,
     Ready,
-    // Error(NodeError),
+    Error(NodeError),
     ShutDown,
     Migrating,
     ScaleUp,
@@ -48,9 +46,10 @@ pub enum NodeStatus {
 
 #[derive(Clone, Debug, CandidType, Deserialize)]
 pub enum NodeError {
-    Migration,
-    ScaleUp,
-    BubbleDown,
+    Migration(String),
+    ScaleUp(String),
+    Initialize(String),
+    Broadcast(String),
 }
 
 #[derive(Clone, Debug, CandidType, Deserialize)]
@@ -76,13 +75,13 @@ where
         Self { data }
     }
 
-    fn encode(self) -> Result<Vec<u8>, ()> {
+    fn encode(self) -> Result<Vec<u8>, String> {
         // encode_args((self,)).map_err(|_| ())
-        Encode!(&self).map_err(|_| ())
+        Encode!(&self).map_err(|e| e.to_string())
     }
 
-    fn decode(data: &Vec<u8>) -> Result<Self, ()> {
-        Decode!(data, DataChunk<Data>).map_err(|_| ())
+    fn decode(data: &Vec<u8>) -> Result<Self, String> {
+        Decode!(data, DataChunk<Data>).map_err(|e| e.to_string())
     }
 }
 
@@ -132,7 +131,8 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
         // current_memory_usage >= self.max_memory
         //     && self.canister.next_node_id.is_none()
         //     && matches!(self.status, NodeStatus::Ready)
-        self.canister.prev_node_id.is_none() && matches!(self.status, NodeStatus::Ready)
+        // let size = self.canister.with_data_mut()
+        self.canister.size() > 2 && self.canister.next_node_id.is_none() && matches!(self.status, NodeStatus::Ready)
     }
 
     fn should_scale_down(&self) -> bool {
@@ -168,10 +168,7 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
         }
     }
 
-    pub async fn lifecyle_init_node(
-        &mut self,
-        all_nodes: Option<Vec<Principal>>
-    ) -> () {
+    pub async fn lifecyle_init_node(&mut self, all_nodes: Option<Vec<Principal>>) -> () {
         let node_id = self.canister.id;
         let mut new_canister: Node<Principal, Data> = Node::new(node_id, Default::default());
 
@@ -188,7 +185,6 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
 
         self.broadcast_event(CanisterManagerEvent::NodeCreated(self.canister.id))
             .await;
-
     }
 
     pub async fn lifecyle_heartbeat_node(&mut self) -> () {
@@ -199,14 +195,36 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
             match create_node_result {
                 Some(new_node_id) => {
                     self.canister.add_node(new_node_id.clone());
-                    self.initialize_node(new_node_id.clone()).await;
-                    self.migrate_data(new_node_id).await;
+                    let result = self.initialize_node(new_node_id.clone()).await;
+                    if !result {
+                        self.canister.remove_node(&new_node_id);
+                        self.status = NodeStatus::Error(NodeError::Initialize(format!(
+                            "Failed to initialize node {}",
+                            new_node_id
+                        )));
+
+                        return;
+                    }
+                    self.status = NodeStatus::Migrating;
+                    let result = self.migrate_data(new_node_id).await;
+
+                    if !result {
+                        self.canister.remove_node(&new_node_id);
+                        self.status = NodeStatus::Error(NodeError::Migration(format!(
+                            "Failed to migrate data to node {}",
+                            new_node_id
+                        )));
+                        return 
+                    }
+
+                    self.status = NodeStatus::Ready;
                     self.canister.next_node_id = Some(new_node_id);
                     self.broadcast_event(CanisterManagerEvent::NodeCreated(new_node_id))
                         .await;
                 }
                 None => {
-                    self.status = NodeStatus::Ready;
+                    self.status =
+                        NodeStatus::Error(NodeError::ScaleUp("Failed to create node".to_string()));
                 }
             }
         } else if self.should_scale_down() {
@@ -238,7 +256,7 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
         }
     }
 
-    async fn initialize_node(&self, canister_id: Principal) -> bool {
+    async fn initialize_node(&mut self, canister_id: Principal) -> bool {
         //vector of &Principal to Principal
 
         let wasm_code = self.wasm_binary.clone().unwrap();
@@ -257,16 +275,33 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
         )
         .await;
 
+        if result.is_err() {
+            self.status = NodeStatus::Error(NodeError::Initialize(format!(
+                "Failed to initialize node {}",
+                canister_id
+            )));
+
+            return false;
+        }
+
         let args = InitCanisterManagerParam {
             args: Some(InstallArgs {
-                prev_node: Some(self.canister.id),
                 all_nodes: self.canister.all_nodes().into_iter().cloned().collect(),
             }),
         };
 
         let result = ic::call::<_, (), _>(canister_id, "init_canister_manager", (args,)).await;
 
-        result.is_ok()
+        if result.is_err() {
+            self.status = NodeStatus::Error(NodeError::Initialize(format!(
+                "Failed to initialize node {}",
+                canister_id
+            )));
+
+            return false;
+        }
+
+        true
     }
 
     fn delete_node(&mut self) -> () {
@@ -274,34 +309,47 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
         // https://github.com/open-ic/open-storage/blob/main/backend/libraries/utils/src/canister/delete.rs
     }
 
-    async fn migrate_to_node(&self, canister_id: Principal, data: Vec<(String, Data)>) -> bool {
+    async fn migrate_to_node(&mut self, canister_id: Principal, data: Vec<(String, Data)>) -> bool {
         #[derive(CandidType, Deserialize)]
         struct Response {
             result: bool,
         }
 
         let call_migrate = |args: MigrateArgs| async {
-            ic::call::<_, (), _>(canister_id, "migrate", (args,))
-                .await
-                .map(|_| true)
-                .map_err(|_| false)
+            ic::call::<_, (), _>(
+                canister_id,
+                "handle_event",
+                (CanisterManagerEvent::Migrate(args),),
+            )
+            .await
+            .map(|_| true)
+            .map_err(|e| e.1)
         };
 
-        let encode_data_chunk = |data_chunk: DataChunk<Data>| -> Result<MigrateArgs, ()> {
-            data_chunk
-                .encode()
-                .map(|data| MigrateArgs { data })
-                .map_err(|_| ())
+        let encode_data_chunk = |data_chunk: DataChunk<Data>| -> Result<MigrateArgs, String> {
+            data_chunk.encode().map(|data| MigrateArgs { data })
         };
 
         for data_chunk in data.chunks(100) {
             let result = match encode_data_chunk(DataChunk::new(data_chunk.to_vec())) {
                 Ok(args) => call_migrate(args).await,
-                _ => Err(false),
+                Err(error) => Err(error),
             };
 
-            if result.is_err() {
-                break;
+            match result {
+                Ok(response) => {
+                    if !response {
+                        self.status = NodeStatus::Error(NodeError::Migration(format!(
+                            "Failed to migrate data to node {}",
+                            canister_id
+                        )));
+                        return false;
+                    }
+                }
+                Err(error) => {
+                    self.status = NodeStatus::Error(NodeError::Migration(error));
+                    return false;
+                }
             }
         }
 
@@ -317,7 +365,12 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
                 }
                 true
             }
-            Err(_) => false,
+            Err(e) => {
+                self.status = NodeStatus::Error(NodeError::Migration(
+                    "Failed to handle migrate data to node".to_string(),
+                ));
+                false
+            }
         }
     }
 
@@ -339,22 +392,33 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
                         .await;
                 }
             }
-            _ => (),
+            CanisterManagerEvent::Migrate(migrate_args) => {
+                self.handle_migrate(migrate_args);
+            }
         }
     }
 
-    async fn migrate_data(&mut self, node_id: Principal) {
+    async fn migrate_data(&mut self, node_id: Principal) -> bool {
         let data_for_migration = self.canister.get_data_to_migrate();
-        self.status = NodeStatus::Migrating;
-        self.migrate_to_node(node_id, data_for_migration).await;
-        self.status = NodeStatus::Ready;
+        let result = self.migrate_to_node(node_id, data_for_migration).await;
+        result
     }
 
-    async fn broadcast_event(&self, event: CanisterManagerEvent) -> () {
-        // send a request to all nodes
+    async fn broadcast_event(&mut self, event: CanisterManagerEvent) -> () {
+        // send a request to all nodes except node_id
         let all_canisters = self.canister.all_nodes();
         for &canister_id in all_canisters {
-            let _ = ic::call::<_, (), _>(canister_id, "handle_event", (event.clone(),)).await;
+            if self.canister.id != canister_id {
+                let result =
+                    ic::call::<_, (), _>(canister_id, "handle_event", (event.clone(),)).await;
+                if result.is_err() {
+                    self.status = NodeStatus::Error(NodeError::Broadcast(format!(
+                        "Failed to broadcast event {:?} to {}",
+                        event, canister_id
+                    )));
+                    return;
+                }
+            }
         }
     }
 
@@ -379,8 +443,8 @@ mod tests {
     use super::CanisterManager;
     use super::WasmInitArgs;
     use async_std::test as async_test;
-    use ic_kit::MockContext;
     use ic_kit::mock_principals;
+    use ic_kit::MockContext;
     use ic_kit::Principal;
 
     #[test]

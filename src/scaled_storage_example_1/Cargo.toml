@@ -16,5 +16,3 @@ scaled_storage = {path = "../scaled_storage"}
 ic-kit = "0.4.4"
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 async-std = { version="1.10.0", features = ["attributes"] }
-
-[profile]

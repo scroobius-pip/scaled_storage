@@ -131,6 +131,9 @@ where
         self.all_nodes.iter().collect()
     }
 
+    pub fn size(&self) -> usize {
+        self.data.len()
+    }
     // fn handle_request(request: Request) -> Response {}
     // fn migrate_data_request()->Request{}
     // fn on_migrate_data_request(node_id: TId, data: Vec<Data>) -> Response {}

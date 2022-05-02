@@ -1,6 +1,14 @@
+type NodeError = variant {
+    Migration: text;
+    ScaleUp: text;
+    Initialize: text;
+    Broadcast: text;
+};
+
 type node_info_status = variant {
     Initialized;
     Ready;
+    Error:NodeError;
     ShutDown;
     Migrating;
     ScaleUp;
@@ -16,7 +24,6 @@ type node_info = record {
 
 type install_args = record {
     all_nodes: vec text;
-    prev_node: opt text;
 };
 
 type init_canister_manager_param = record {
@@ -25,6 +32,11 @@ type init_canister_manager_param = record {
 
 type migrate_args = record {
     data: blob;
+};
+
+type wasm_init_args = record {
+    position: nat8;
+    wasm_chunk: blob;
 };
 
 type canister_manager_event = variant {
@@ -38,5 +50,8 @@ service : {
      "node_info": () -> (node_info) query;
      "init_canister_manager":(init_canister_manager_param)-> ();
      "handle_event":(canister_manager_event)->();
+     "init_wasm":(wasm_init_args)->(bool);
+     "get_data":(text)->(text) query;
+     "update_data":(text,text)->(text);
 }
 

@@ -1,5 +1,6 @@
 [workspace]
 members = [
     "src/scaled_storage_example_1",
-    "src/scaled_storage"
+    "src/scaled_storage",
+    "src/wasm_uploader"
 ]
