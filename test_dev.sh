@@ -1,0 +1,1 @@
+./target/debug/stress_test rrkah-fqaaa-aaaaa-aaaaq-cai http://localhost:8000 $1

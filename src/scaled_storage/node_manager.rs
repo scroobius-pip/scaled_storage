@@ -62,6 +62,7 @@ pub struct NodeInfo {
     pub prev_node_id: Option<Principal>,
     pub next_node_id: Option<Principal>,
     pub status: NodeStatus,
+    pub cycles_balance: u64
 }
 
 #[derive(CandidType, Deserialize)]
@@ -532,6 +533,7 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
             next_node_id: self.canister.next_node_id,
             prev_node_id: self.canister.prev_node_id,
             status: self.status.clone(),
+            cycles_balance: ic::balance()
         }
     }
 }

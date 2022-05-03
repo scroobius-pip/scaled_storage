@@ -9,26 +9,27 @@ use ic_agent::{
 };
 use rand::seq::SliceRandom;
 use random_string::generate;
-use std::collections::{HashSet};
+use std::collections::HashSet;
 
 #[derive(Parser, Debug)]
 #[clap(author)]
 struct Args {
     canister_id: String,
     url: String,
-    size: usize
+    size: usize,
 }
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     let args = Args::parse();
     let agent = Agent::builder()
-        .with_url(args.url)
+        .with_url(args.url.clone())
         .with_identity(AnonymousIdentity)
         .build()
         .unwrap();
 
-   let _ = agent.fetch_root_key().await;
+    println!("Parsed args");
+    agent.fetch_root_key().await;
 
     let mut update_builder = agent.update(
         &Principal::from_text(args.canister_id).unwrap(),
@@ -37,16 +38,21 @@ async fn main() {
 
     let waiter = garcon::Delay::builder()
         .throttle(std::time::Duration::from_millis(500))
-        .timeout(std::time::Duration::from_secs(60 * 5))
+        .timeout(std::time::Duration::from_secs(10))
         .build();
 
-    let key_values = generate_key_value_pair(args.size);
+    println!("Created agent");
+
+    let key_values = generate_key_value_pair(args.size.clone());
+
+    println!("Generated key value pairs {:?}", key_values);
 
     let mut results: Vec<NodeResult> = Vec::new();
     let mut values: HashSet<String> = HashSet::new();
 
     // Able to send and retrieve all data intact
-    while let Some((key, value)) = key_values.iter().next() {
+    for (key, value) in &key_values {
+        println!("{} {}", key, value);
         let result = set(key, value, &mut update_builder, &waiter).await;
         values.insert(result.data.clone());
         results.push(result);
@@ -55,9 +61,9 @@ async fn main() {
     // All values are present in results
     assert_eq!(results.len(), key_values.len());
     assert!(key_values.iter().all(|(_, value)| values.contains(value)),);
+    println!("All values are present in results");
 
     // Able to send from any canister
-
     let mut query_builders: Vec<QueryBuilder> = Vec::new();
     for canister_id in results
         .iter()
@@ -72,8 +78,10 @@ async fn main() {
         //get random query builder
         let query_builder = query_builders.choose_mut(&mut rand::thread_rng()).unwrap();
         let result = get(key, query_builder).await;
-        assert!(values.contains(&result.data),"{}", result.data);
+        assert!(values.contains(&result.data), "{}", result.data);
     }
+
+    println!("Queries can be received from any canister");
 }
 
 async fn set(

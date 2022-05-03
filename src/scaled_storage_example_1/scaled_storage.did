@@ -21,6 +21,7 @@ type node_info = record {
     prev_node_id: opt principal;
     next_node_id: opt principal;
     status: node_info_status;
+    cycles_balance: nat64;
 };
 
 type install_args = record {
