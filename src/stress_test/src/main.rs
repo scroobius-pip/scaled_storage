@@ -38,7 +38,7 @@ async fn main() {
 
     let waiter = garcon::Delay::builder()
         .throttle(std::time::Duration::from_millis(500))
-        .timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(20))
         .build();
 
     println!("Created agent");

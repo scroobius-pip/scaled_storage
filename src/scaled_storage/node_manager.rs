@@ -62,7 +62,7 @@ pub struct NodeInfo {
     pub prev_node_id: Option<Principal>,
     pub next_node_id: Option<Principal>,
     pub status: NodeStatus,
-    pub cycles_balance: u64
+    pub cycles_balance: u64,
 }
 
 #[derive(CandidType, Deserialize)]
@@ -112,10 +112,11 @@ pub struct CanisterManager<Data: Default + Clone> {
     status: NodeStatus,
     pub canister: Canister<Data>,
     wasm_binary: Option<Vec<u8>>,
+    should_upgrade_func: fn(usize) -> bool,
 }
 
 impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data> {
-    pub fn new(node_id: Principal) -> Self {
+    pub fn new(node_id: Principal, should_upgrade_func: fn(usize) -> bool) -> Self {
         let mut new_canister: Node<Principal, Data> =
             Node::new(node_id.clone(), Default::default());
 
@@ -125,6 +126,7 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
             status: NodeStatus::Initialized,
             canister: new_canister,
             wasm_binary: None, // reserve_memory: 0,
+            should_upgrade_func,
         }
     }
 
@@ -147,7 +149,7 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
 
     // pub async fn with_data_mut<F, R, M>(
     //     &mut self,
-    //     key: String,
+    //     key: String,should_upgrade_func
     //     action: F,
     //     method: M,
     // ) -> Result<R, String>
@@ -173,7 +175,7 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
     }
 
     fn should_scale_up(&self) -> bool {
-        self.canister.size() > 2
+        (self.should_upgrade_func)(self.canister.size())
             && self.canister.next_node_id.is_none()
             && matches!(self.status, NodeStatus::Ready)
     }
@@ -533,7 +535,7 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
             next_node_id: self.canister.next_node_id,
             prev_node_id: self.canister.prev_node_id,
             status: self.status.clone(),
-            cycles_balance: ic::balance()
+            cycles_balance: ic::balance(),
         }
     }
 }
@@ -552,7 +554,7 @@ mod tests {
     #[test]
     fn new_node() {
         let node_id = Principal::anonymous();
-        let cm = CanisterManager::<String>::new(node_id);
+        let cm = CanisterManager::<String>::new(node_id, |size| size > 10);
         let node_info = cm.node_info();
 
         assert_eq!(node_info.all_nodes, vec![node_id.to_string()]);
@@ -569,7 +571,7 @@ mod tests {
             .with_constant_return_handler(())
             .inject();
 
-        let mut cm = CanisterManager::<String>::new(node_id.clone());
+        let mut cm = CanisterManager::<String>::new(node_id.clone(), |size| size > 10);
         let all_nodes = vec![previous_node.clone()];
 
         cm.lifecyle_init_node(Some(all_nodes)).await;
@@ -587,7 +589,7 @@ mod tests {
     #[test]
     fn node_wasm_initialized_properly() {
         let node_id = mock_principals::alice();
-        let mut cm = CanisterManager::<String>::new(node_id.clone());
+        let mut cm = CanisterManager::<String>::new(node_id.clone(), |size| size > 10);
 
         assert!(cm.lifecycle_init_wasm(WasmInitArgs {
             position: 0,
