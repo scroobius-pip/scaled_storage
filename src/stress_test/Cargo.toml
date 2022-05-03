@@ -1,15 +1,16 @@
 [package]
-name = "wasm_uploader"
+name = "stress_test"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "3.1.14", features = ["derive"] }
-read-byte-slice = "0.1.2"
+tokio = {version = "1.18.0", features = ["rt", "macros"]}
 candid = "0.7.4"
 serde = "1.0.137"
-tokio = {version = "1.18.0", features = ["rt", "macros"]}
 ic-agent = "0.15.0"
 garcon = "0.2.3"
+random-string = "1.0.0"
+clap = { version = "3.1.14", features = ["derive"] }
+rand = "0.7.2"

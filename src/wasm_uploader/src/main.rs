@@ -1,7 +1,7 @@
 use candid::{CandidType, Decode, Deserialize, Encode};
 use clap::Parser;
 use garcon::Delay;
-use ic_agent::{agent::{UpdateBuilder,ReplicaV2Transport}, ic_types::Principal, identity::AnonymousIdentity, Agent,};
+use ic_agent::{agent::{UpdateBuilder}, ic_types::Principal, identity::AnonymousIdentity, Agent,};
 use read_byte_slice::{ByteSliceIter, FallibleStreamingIterator};
 use std::fs::File;
 
@@ -100,11 +100,3 @@ pub async fn init_wasm(
     let result = Decode!(response.as_slice(), bool).unwrap();
     result
 }
-
-// fn get_canister(canister_id: String){
-//     let canister_builder = Canister::builder();
-//     canister_builder.with_canister_id(canister_id)
-//         .with_interface(interface);
-
-//     ManagementCanister
-// }

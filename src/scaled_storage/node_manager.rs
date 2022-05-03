@@ -484,16 +484,12 @@ impl<Data: Default + Clone + CandidType + DeserializeOwned> CanisterManager<Data
                 if node_id != self.canister.id {
                     self.canister.add_node(node_id);
                     self.migrate_data(node_id).await;
-                    self.broadcast_event(CanisterManagerEvent::NodeCreated(node_id))
-                        .await;
                 }
             }
             CanisterManagerEvent::NodeDeleted(node_id) => {
                 if node_id != self.canister.id {
                     self.canister.remove_node(&node_id);
                     self.migrate_data(node_id).await;
-                    self.broadcast_event(CanisterManagerEvent::NodeDeleted(node_id))
-                        .await;
                 }
             }
             CanisterManagerEvent::Migrate(migrate_args) => {
