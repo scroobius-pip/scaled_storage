@@ -1,1 +1,1 @@
-cargo build --bins
+cargo build

@@ -1,37 +1,31 @@
-# scaled_storage
+# Scaletor
 
-Welcome to your new scaled_storage project and to the internet computer development community. By default, creating a new project adds this README and some template files to your project directory. You can edit these template files to customize your project and to include your own code to speed up the development cycle.
+Scaletor is a multi-canister scaling solution for the Internet Computer.
 
-To get started, you might want to explore the project directory structure and the default configuration file. Working with this project in your development environment will not affect any production deployment or identity tokens.
+## Features
+1. Imported as a Rust library
+2. Scales up or down depending on 
+ developer defined behaviour.
+3. “[Quine](https://en.wikipedia.org/wiki/Quine_(computing))” style canister replication. All canisters are functionally alike and use the same code.
+4.  House keeping operations (migrations, scaling up and down) are abstracted away.
+5. There isn’t a “primary”, “index” or “secondary” canister, any request can be taken from any canister.
+6. Tries to reduce inter-canister calls.
 
-To learn more before you start working with scaled_storage, see the following documentation available online:
+## Run canister scaling test
+The test uses a rust canister consuming the scaletor library. The canister has been configured to scale up after 10 keys have been added. It checks that all operations are successful, and can be done from any canister.
 
-- [Quick Start](https://smartcontracts.org/docs/quickstart/quickstart-intro.html)
-- [SDK Developer Tools](https://smartcontracts.org/docs/developers-guide/sdk-guide.html)
-- [Rust Canister Devlopment Guide](https://smartcontracts.org/docs/rust-guide/rust-intro.html)
-- [ic-cdk](https://docs.rs/ic-cdk)
-- [ic-cdk-macros](https://docs.rs/ic-cdk-macros)
-- [Candid Introduction](https://smartcontracts.org/docs/candid-guide/candid-intro.html)
-- [JavaScript API Reference](https://erxue-5aaaa-aaaab-qaagq-cai.raw.ic0.app)
+### Steps
+1. Run `cargo build --bins`
+2. Run `./deploy_dev.sh`
+3. Run `./test_dev.sh [number_of_keys]`. 
 
-If you want to start working on your project right away, you might want to try the following commands:
+If you for example run `./test_dev.sh 100` 10 canisters would be created.
 
-```bash
-cd scaled_storage/
-dfx help
-dfx config --help
-```
+### Issues
+1. Scale down logic hasn't been implemented
+2. There is an unequal distribution of cycles, the last canister always has the lowest amount of cycles. 
+3. The current consistent hashing algorithm does not stop distributing keys to prior canisters. I've opened a StackOverflow [bounty](https://cs.stackexchange.com/questions/150613/consistent-hashing-algorithm-without-distribution-load-balancing/151070#151070) about this.
+4. There isn't retry logic for failed housekeeping operations.
 
-## Running the project locally
-
-If you want to test your project locally, you can use the following commands:
-
-```bash
-# Starts the replica, running in the background
-dfx start --background
-
-# Deploys your canisters to the replica and generates your candid interface
-dfx deploy
-```
-
-Once the job completes, your application will be available at `http://localhost:8000?canisterId={asset_canister_id}`.
+## Usage
+Library specific documentation incoming, for now you can check `./src/scaled_storage_example_1`
