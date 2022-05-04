@@ -29,7 +29,7 @@ async fn main() {
         .unwrap();
 
     println!("Parsed args");
-    agent.fetch_root_key().await;
+    let _ = agent.fetch_root_key().await;
 
     let mut update_builder = agent.update(
         &Principal::from_text(args.canister_id).unwrap(),
@@ -76,7 +76,7 @@ async fn main() {
 
     for (key, _) in key_values {
         //get random query builder
-        
+
         let query_builder = query_builders.choose_mut(&mut rand::thread_rng()).unwrap();
         let result = get(key, query_builder).await;
         assert!(values.contains(&result.data), "{}", result.data);

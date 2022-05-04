@@ -6,7 +6,6 @@ use ic_cdk::export::{
     candid::{CandidType, Deserialize},
     Principal,
 };
-use read_byte_slice::{ByteSliceIter, FallibleStreamingIterator};
 
 use ic_kit::candid::{Decode, Encode};
 use ic_kit::ic;
