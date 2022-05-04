@@ -2,7 +2,8 @@
 name = "ss_uploader"
 version = "0.1.0"
 edition = "2021"
-
+license = "MIT"
+description = "Wasm Uploader for Scaled Storage"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
