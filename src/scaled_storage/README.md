@@ -1,5 +1,5 @@
-# Steps
-## Initialize Canister Manager
+## Steps
+### Initialize Canister Manager
 ```rust
 use scaled_storage::node_manager::{
     CanisterManager, CanisterManagerEvent, InitCanisterManagerParam, NodeInfo, WasmInitArgs,
@@ -17,7 +17,8 @@ fn init(){
 
 ```
 
-## Add CanisterManager house-keeping methods
+### Add CanisterManager house-keeping methods
+
 ```rust
 
 
@@ -54,7 +55,7 @@ async fn handle_event(event: CanisterManagerEvent) {
 }
 
 ```
-## Update candid file
+### Update candid file
 ```text
 
 type install_args = record {
@@ -89,7 +90,7 @@ service: {
 
 ```
 
-## Access underlying data
+### Access your data
 ```rust
  unsafe {
      let canister_manager = &mut CANISTER_MANAGER.as_mut().unwrap().canister;
@@ -114,4 +115,8 @@ service: {
  }
  ```
 
- ## Once canister has been deployed, canister manager must be initialized with wasm_uploader
+ ### Once canister has been deployed, canister manager must be initialized with ss_uploader
+
+ ```bash
+ cargo install ss_uploader
+ ```
