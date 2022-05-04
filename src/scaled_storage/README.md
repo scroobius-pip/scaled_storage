@@ -54,6 +54,21 @@ async fn handle_event(event: CanisterManagerEvent) {
     }
 }
 
+#[update]
+async fn init_canister_manager(param: InitCanisterManagerParam) {
+    unsafe {
+        match param.args {
+            Some(args) => CANISTER_MANAGER
+                .as_mut()
+                .unwrap()
+                .lifecyle_init_node(Some(args.all_nodes)),
+            None => CANISTER_MANAGER.as_mut().unwrap().lifecyle_init_node(None),
+        }
+        .await
+    }
+}
+
+
 ```
 ### Update candid file
 ```text
