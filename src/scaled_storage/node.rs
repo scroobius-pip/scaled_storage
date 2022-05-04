@@ -1,4 +1,4 @@
-/// Scaled Storage - A dht solution for the internet computer
+/// IC - A DHT solution for the internet computer
 use anchorhash::AnchorHash;
 // use anchorhash::AnchorHash::
 use highway::HighwayBuildHasher;

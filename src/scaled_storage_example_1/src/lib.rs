@@ -10,7 +10,7 @@ static mut CANISTER_MANAGER: Option<CanisterManager<String>> = None;
 #[init]
 fn init() {
     unsafe {
-        CANISTER_MANAGER = Some(CanisterManager::new(ic::id(), |size| size > 10));
+        CANISTER_MANAGER = Some(CanisterManager::new(ic::id(), |size| size > 50));
     }
 }
 
