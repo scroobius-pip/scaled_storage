@@ -53,7 +53,6 @@ type node_result = record {
 }
 
 service : {
-    "greet": (text) -> (text) query;
      "node_info": () -> (node_info) query;
      "init_canister_manager":(init_canister_manager_param)-> ();
      "handle_event":(canister_manager_event)->();

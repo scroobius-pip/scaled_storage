@@ -68,10 +68,41 @@ async fn init_canister_manager(param: InitCanisterManagerParam) {
     }
 }
 
+#[query]
+fn node_info() -> NodeInfo {
+    unsafe { CANISTER_MANAGER.as_mut().unwrap().node_info() }
+}
 
 ```
 ### Update candid file
 ```text
+
+type NodeError = variant {
+    Migration: text;
+    ScaleUp: text;
+    Initialize: text;
+    Broadcast: text;
+};
+
+type node_info_status = variant {
+    Initialized;
+    Ready;
+    Error:NodeError;
+    ShutDown;
+    Migrating;
+    ScaleUp;
+    ScaleDown;
+};
+
+
+type node_info = record {
+    all_nodes: vec text;
+    prev_node_id: opt principal;
+    next_node_id: opt principal;
+    status: node_info_status;
+    cycles_balance: nat64;
+};
+
 
 type install_args = record {
     all_nodes: vec text;
@@ -101,6 +132,7 @@ service: {
 "init_canister_manager":(init_canister_manager_param)-> ();
 "handle_event":(canister_manager_event)->();
 "init_wasm":(wasm_init_args)->(bool);
+ "node_info": () -> (node_info) query;
 }
 
 ```
@@ -124,7 +156,7 @@ service: {
              CanisterManager::forward_request(node_id, "method_name", args)
          }
          NodeResult::Result(result) => {
-             //do something with result
+             //do something with result (data.clone() from with_upsert_data_mut closure )
          }
      }
  }
