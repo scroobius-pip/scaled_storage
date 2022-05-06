@@ -12,7 +12,7 @@ Scaled Storage is a multi-canister scaling solution for the Internet Computer.
 6. Tries to reduce inter-canister calls.
 
 ## Run canister scaling test
-The test uses a rust canister consuming the scaletor library. The canister has been configured to scale up after 10 keys have been added. It checks that all operations are successful, and can be done from any canister.
+The test uses a rust canister consuming the library. The canister has been configured to scale up after 10 keys have been added. It checks that all operations are successful, and can be done from any canister.
 
 ### Steps
 1. Run `cargo build --bins`
