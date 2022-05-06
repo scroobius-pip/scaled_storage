@@ -29,3 +29,5 @@ If you for example run `./test_dev.sh 100` 10 canisters would be created.
 
 ## Usage
 Library specific documentation incoming, for now you can check `./src/scaled_storage_example_1`
+
+MIT LICENSE
