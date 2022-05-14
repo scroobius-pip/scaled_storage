@@ -17,7 +17,7 @@ The test uses a rust canister consuming the scaletor library. The canister has b
 ### Steps
 1. Run `cargo build --bins`
 2. Run `./deploy_dev.sh`
-3. Run `./test_dev.sh [number_of_keys]`. 
+3. Benchmark using: `./test_dev.sh [number_of_keys]`. 
 
 If you for example run `./test_dev.sh 100` 10 canisters would be created.
 
